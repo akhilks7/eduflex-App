@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
-
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 
 class ComplaintPage extends StatefulWidget {
   const ComplaintPage({super.key});
@@ -11,65 +11,115 @@ class ComplaintPage extends StatefulWidget {
 
 class _ComplaintPageState extends State<ComplaintPage> {
   final _formKey = GlobalKey<FormState>();
+  final SupabaseClient supabase = Supabase.instance.client;
   String _title = '';
   String _complaint = '';
+  List<dynamic> _previousComplaints = [];
+  bool _isLoading = false;
+  bool _isSubmitting = false;
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _complaintController = TextEditingController();
 
-  // Mock data for previous complaints
-  final List<Map<String, dynamic>> _previousComplaints = [
-    {
-      'id': 1,
-      'title': 'Video Not Loading',
-      'content': 'The course video is not playing properly.',
-      'reply': 'We are looking into it.',
-      'date': '2025-03-27',
-    },
-    {
-      'id': 2,
-      'title': 'Assignment Issue',
-      'content': 'Unable to submit assignment.',
-      'reply': 'Resolved, try again.',
-      'date': '2025-03-26',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchComplaints();
+  }
 
-  void _submitComplaint() {
-    if (_formKey.currentState!.validate()) {
-      // Simulate submitting complaint (replace with actual API call)
-      final newComplaint = {
-        'id': _previousComplaints.length + 1,
-        'title': _title,
-        'content': _complaint,
-        'reply': 'Pending',
-        'date': DateTime.now().toString().substring(0, 10),
-      };
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _complaintController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchComplaints() async {
+    try {
+      setState(() => _isLoading = true);
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final response = await supabase
+          .from('User_tbl_complaint')
+          .select()
+          .eq('user_id', userId)
+          .order('complaint_date', ascending: false);
+
       setState(() {
-        _previousComplaints.add(newComplaint);
-        _title = '';
-        _complaint = '';
+        _previousComplaints = response;
+        _isLoading = false;
       });
+    } catch (e) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Complaint submitted successfully!'),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
+        SnackBar(content: Text('Error fetching complaints: $e')),
       );
     }
   }
 
-  void _deleteComplaint(int id) {
-    setState(() {
-      _previousComplaints.removeWhere((complaint) => complaint['id'] == id);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Complaint deleted!'),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+  Future<void> _submitComplaint() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        setState(() => _isSubmitting = true);
+        final userId = supabase.auth.currentUser?.id;
+        if (userId == null) {
+          throw Exception('User not authenticated');
+        }
+
+        await supabase.from('User_tbl_complaint').insert({
+          'complaint_title': _title,
+          'complaint_content': _complaint,
+          'complaint_status': 0,
+          'complaint_date': DateTime.now().toIso8601String(),
+          'user_id': userId,
+        });
+
+        setState(() {
+          _title = '';
+          _complaint = '';
+          _titleController.clear();
+          _complaintController.clear();
+          _isSubmitting = false;
+        });
+
+        await _fetchComplaints(); // Refresh complaints list
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Complaint submitted successfully!'),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } catch (e) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting complaint: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteComplaint(int id) async {
+    try {
+      await supabase.from('User_tbl_complaint').delete().eq('id', id);
+      await _fetchComplaints(); // Refresh complaints list
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Complaint deleted successfully!'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting complaint: $e')),
+      );
+    }
   }
 
   @override
@@ -78,73 +128,94 @@ class _ComplaintPageState extends State<ComplaintPage> {
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.blue.shade900, Colors.blue.shade300],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.blue.shade800, Colors.blue.shade200],
           ),
         ),
         child: CustomScrollView(
           slivers: [
-            // Header
+            // Enhanced AppBar
             SliverAppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
               pinned: true,
+              expandedHeight: 200,
               flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Colors.blue.shade900, Colors.blue.shade600],
+                    ),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(height: 60),
+                        Icon(Icons.feedback, color: Colors.white, size: 50),
+                        SizedBox(height: 10),
+                        Text(
+                          'Complaint Portal',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 10,
+                                color: Colors.black45,
+                                offset: Offset(2, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 title: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16.0),
-                      child: Text(
-                        'EDUFLEX',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black26,
-                              offset: Offset(2, 2),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
+                    const Text(
+                      'EDUFLEX',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.menu, color: Colors.white),
                       onSelected: (value) {
-                        // Handle navigation (replace with actual routes)
+                        // Implement navigation
                         switch (value) {
                           case 'Home':
-                            // Navigator.pushNamed(context, '/home');
+                            Navigator.pushNamed(context, '/home');
                             break;
                           case 'Logout':
-                            // Navigator.pushNamed(context, '/logout');
+                            supabase.auth.signOut();
+                            Navigator.pushNamed(context, '/login');
                             break;
                           case 'Search Courses':
-                            // Navigator.pushNamed(context, '/search_courses');
-                            break;
-                          case 'Feedback':
-                            // Navigator.pushNamed(context, '/feedback');
+                            Navigator.pushNamed(context, '/search_courses');
                             break;
                           case 'My Courses':
-                            // Navigator.pushNamed(context, '/my_courses');
+                            Navigator.pushNamed(context, '/my_courses');
                             break;
                           case 'My Profile':
-                            // Navigator.pushNamed(context, '/profile');
+                            Navigator.pushNamed(context, '/profile');
                             break;
                         }
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(value: 'Home', child: Text('Home')),
-                        const PopupMenuItem(value: 'Logout', child: Text('Logout')),
                         const PopupMenuItem(value: 'Search Courses', child: Text('Search Courses')),
-                        const PopupMenuItem(value: 'Feedback', child: Text('Feedback')),
                         const PopupMenuItem(value: 'My Courses', child: Text('My Courses')),
-                        const PopupMenuItem(value: 'Complaint', child: Text('Complaint')),
                         const PopupMenuItem(value: 'My Profile', child: Text('My Profile')),
+                        const PopupMenuItem(value: 'Logout', child: Text('Logout')),
                       ],
                     ),
                   ],
@@ -160,12 +231,12 @@ class _ComplaintPageState extends State<ComplaintPage> {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.95),
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
@@ -174,29 +245,23 @@ class _ComplaintPageState extends State<ComplaintPage> {
                     children: [
                       // Submit Complaint Section
                       Text(
-                        'Submit a Complaint',
+                        'Raise a Complaint',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: Colors.blue.shade900,
+                          letterSpacing: 1.2,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
                       Form(
                         key: _formKey,
                         child: Column(
                           children: [
-                            TextFormField(
-                              decoration: InputDecoration(
-                                labelText: 'Title',
-                                labelStyle: TextStyle(color: Colors.blue.shade900),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                              ),
+                            _buildTextField(
+                              controller: _titleController,
+                              label: 'Complaint Title',
+                              hint: 'Enter complaint title',
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
                                   return 'Please enter a title';
@@ -206,20 +271,14 @@ class _ComplaintPageState extends State<ComplaintPage> {
                               onChanged: (value) => _title = value,
                             ),
                             const SizedBox(height: 20),
-                            TextFormField(
+                            _buildTextField(
+                              controller: _complaintController,
+                              label: 'Complaint Details',
+                              hint: 'Describe your complaint',
                               maxLines: 5,
-                              decoration: InputDecoration(
-                                labelText: 'Complaint',
-                                labelStyle: TextStyle(color: Colors.blue.shade900),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                              ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
-                                  return 'Please enter your complaint';
+                                  return 'Please enter complaint details';
                                 }
                                 return null;
                               },
@@ -229,23 +288,32 @@ class _ComplaintPageState extends State<ComplaintPage> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _submitComplaint,
+                                onPressed: _isSubmitting ? null : _submitComplaint,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.blue.shade700,
-                                  padding: const EdgeInsets.symmetric(vertical: 15),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   elevation: 5,
                                 ),
-                                child: const Text(
-                                  'Submit',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                child: _isSubmitting
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Submit Complaint',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                               ),
                             ),
                           ],
@@ -255,82 +323,35 @@ class _ComplaintPageState extends State<ComplaintPage> {
 
                       // Previous Complaints Section
                       Text(
-                        'Previous Complaints',
+                        'Your Complaints',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: Colors.blue.shade900,
+                          letterSpacing: 1.2,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
-                      _previousComplaints.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No complaints yet.',
-                                style: TextStyle(fontSize: 16, color: Colors.grey),
-                              ),
-                            )
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _previousComplaints.length,
-                              itemBuilder: (context, index) {
-                                final complaint = _previousComplaints[index];
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  elevation: 3,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(15),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '${index + 1}. ${complaint['title']}',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.blue.shade900,
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete, color: Colors.red),
-                                              onPressed: () => _deleteComplaint(complaint['id']),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          'Content: ${complaint['content']}',
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
-                                        Text(
-                                          'Reply: ${complaint['reply']}',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                                        ),
-                                        Text(
-                                          'Date: ${complaint['date']}',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                      _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _previousComplaints.isEmpty
+                              ? _buildEmptyState()
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _previousComplaints.length,
+                                  itemBuilder: (context, index) {
+                                    final complaint = _previousComplaints[index];
+                                    return _buildComplaintCard(complaint, index);
+                                  },
+                                ),
                     ],
                   ),
                 ),
               ),
             ),
 
-            // Footer
+            // Enhanced Footer
             SliverToBoxAdapter(
               child: Container(
                 padding: const EdgeInsets.all(20),
@@ -338,56 +359,30 @@ class _ComplaintPageState extends State<ComplaintPage> {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Colors.blue.shade900, Colors.blue.shade300],
+                    colors: [Colors.blue.shade900, Colors.blue.shade600],
                   ),
                 ),
                 child: Column(
                   children: [
-                    Text(
-                      'Copyright © 2036 Scholar Organization. All rights reserved.',
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    const Text(
+                      'EDUFLEX Support',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Contact us at support@eduflex.com | +1 (555) 123-4567',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'Design: ',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            // Handle TemplateMo link
-                          },
-                          child: const Text(
-                            'TemplateMo',
-                            style: TextStyle(
-                              color: Colors.yellow,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Distribution: ',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            // Handle ThemeWagon link
-                          },
-                          child: const Text(
-                            'ThemeWagon',
-                            style: TextStyle(
-                              color: Colors.yellow,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 20),
+                    Text(
+                      'Copyright © ${DateTime.now().year} EDUFLEX. All rights reserved.',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -395,6 +390,161 @@ class _ComplaintPageState extends State<ComplaintPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required String? Function(String?) validator,
+    required Function(String) onChanged,
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        labelStyle: TextStyle(color: Colors.blue.shade900),
+        hintStyle: TextStyle(color: Colors.grey.shade400),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blue.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.blue.shade50,
+        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+      ),
+      validator: validator,
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildComplaintCard(Map<String, dynamic> complaint, int index) {
+    final status = complaint['complaint_status'] == 1 ? 'Resolved' : 'Pending';
+    final date = DateTime.parse(complaint['complaint_date']);
+    final formattedDate = DateFormat('MMM dd, yyyy').format(date);
+
+    return Dismissible(
+      key: Key(complaint['id'].toString()),
+      direction: DismissDirection.endToStart,
+      onDismissed: (direction) => _deleteComplaint(complaint['id']),
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        elevation: 4,
+        child: ExpansionTile(
+          leading: CircleAvatar(
+            backgroundColor: status == 'Resolved' ? Colors.green.shade100 : Colors.orange.shade100,
+            child: Icon(
+              status == 'Resolved' ? Icons.check_circle : Icons.hourglass_empty,
+              color: status == 'Resolved' ? Colors.green : Colors.orange,
+            ),
+          ),
+          title: Text(
+            '${index + 1}. ${complaint['complaint_title']}',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue.shade900,
+            ),
+          ),
+          subtitle: Text(
+            formattedDate,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(15),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Details: ${complaint['complaint_content']}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Status: $status',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: status == 'Resolved' ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (complaint['complaint_replay'] != null &&
+                      complaint['complaint_replay'].isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Reply: ${complaint['complaint_replay']}',
+                      style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      label: const Text('Delete', style: TextStyle(color: Colors.red)),
+                      onPressed: () => _deleteComplaint(complaint['id']),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.feedback_outlined,
+            size: 60,
+            color: Colors.blue.shade700,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No complaints submitted yet.',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.blue.shade900,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Feel free to raise any issues above.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

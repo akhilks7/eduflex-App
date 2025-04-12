@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'package:eduflex/loginpage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UserRegistration extends StatefulWidget {
   const UserRegistration({super.key});
@@ -8,82 +12,170 @@ class UserRegistration extends StatefulWidget {
 }
 
 class _UserRegistrationState extends State<UserRegistration> {
+  final supabase = Supabase.instance.client;
   final TextEditingController emailController = TextEditingController();
   final TextEditingController repasswordController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
   final TextEditingController contactController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController placeController = TextEditingController();
 
-  void register() {
-    // Registration logic
+  final ImagePicker _picker = ImagePicker();
+  File? _photo;
+
+  String? _selectedDistrict;
+  String? _selectedPlace;
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _districts = [];
+  List<Map<String, dynamic>> _places = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDistricts();
+  }
+
+  Future<void> _fetchDistricts() async {
+    try {
+      final response = await supabase
+          .from('Admin_tbl_district')
+          .select()
+          .order('district_name', ascending: true);
+      setState(() {
+        _districts = List<Map<String, dynamic>>.from(response);
+        if (_districts.isNotEmpty) {
+          _selectedDistrict = _districts[0]['id'].toString();
+        }
+      });
+    } catch (e) {
+      _showSnackBar('Error fetching districts: $e', Colors.red);
+    }
+  }
+
+  Future<void> _fetchPlace(String did) async {
+    try {
+      final response = await supabase
+          .from('Admin_tbl_place')
+          .select()
+          .eq('district_id', did)
+          .order('place_name', ascending: true);
+      setState(() {
+        _places = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      _showSnackBar('Error fetching places: $e', Colors.red);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _photo = File(pickedFile.path);
+        print(_photo);
+      });
+    }
+  }
+
+  Future<void> register() async {
+    final name = nameController.text.trim();
+    final email = emailController.text.trim();
+    final contact = contactController.text.trim();
+    final address = addressController.text.trim();
+    final place = placeController.text.trim();
+    final password = passwordController.text.trim();
+    final repassword = repasswordController.text.trim();
+    final district = _selectedDistrict;
+
+   
+    if (password != repassword) {
+      _showSnackBar('Passwords do not match', Colors.red);
+      return;
+    }
+
+    try {
+      setState(() => _isLoading = true);
+
+      final auth = await supabase.auth.signUp(email: email, password: password);
+      final uid = auth.user!.id;
+
+      String? photoUrl = await _uploadImage(uid);
+
+      await supabase.from('Guest_tbl_user').insert({
+        'user_id': uid,
+        'user_name': name,
+        'user_email': email,
+        'user_contact': contact,
+        'user_address': address,
+        'place_id': _selectedPlace,
+        'user_password': password,
+        'user_photo': photoUrl,
+      });
+
+      _showSnackBar('Registration successful!', Colors.green);
+      Navigator.pushReplacement(context, MaterialPageRoute(builder:(context) => LoginPage(),));
+    } catch (e) {
+      _showSnackBar('Registration failed: $e', Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<String?> _uploadImage(String uid) async {
+    try {
+      final fileName = 'userdocs_$uid';
+      await supabase.storage.from('userdocs').upload(fileName, _photo!);
+      final imageUrl = supabase.storage.from('userdocs').getPublicUrl(fileName);
+      return imageUrl;
+    } catch (e) {
+      print('Image upload failed: $e');
+      return null;
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: color,
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "User Registration",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-        elevation: 5,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
+      appBar: AppBar(title: const Text("User Registration")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (_photo != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(_photo!, height: 150, width: 150, fit: BoxFit.cover),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.person_add, size: 60, color: Colors.blue),
-                    const SizedBox(height: 15),
-                    _buildTextField(nameController, "Name", Icons.person),
-                    _buildTextField(emailController, "Email", Icons.email),
-                    _buildTextField(contactController, "Contact", Icons.phone),
-                    _buildTextField(addressController, "Address", Icons.home),
-                    _buildTextField(passwordController, "Password", Icons.lock, isPassword: true),
-                    _buildTextField(repasswordController, "Re-enter Password", Icons.lock, isPassword: true),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: register,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        "Register",
-                        style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            TextButton.icon(
+              onPressed: _pickImage, // <-- FIXED HERE
+              icon: const Icon(Icons.image),
+              label: const Text("Upload Profile Photo"),
             ),
-          ),
+            _buildTextField(nameController, "Name", Icons.person),
+            _buildTextField(emailController, "Email", Icons.email),
+            _buildTextField(contactController, "Contact", Icons.phone),
+            _buildTextField(addressController, "Address", Icons.home),
+            _buildDistrictDropdown(),
+            _buildPlaceDropdown(),
+            _buildTextField(passwordController, "Password", Icons.lock, isPassword: true),
+            _buildTextField(repasswordController, "Re-enter Password", Icons.lock, isPassword: true),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isLoading ? null : register,
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Register"),
+            ),
+          ],
         ),
       ),
     );
@@ -96,15 +188,60 @@ class _UserRegistrationState extends State<UserRegistration> {
         controller: controller,
         obscureText: isPassword,
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.blueAccent),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.blueAccent),
-          ),
-          filled: true,
-          fillColor: Colors.grey[100],
+          prefixIcon: Icon(icon),
           labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDistrictDropdown() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: DropdownButtonFormField<String>(
+        value: _selectedDistrict,
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.map),
+          labelText: 'District',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        items: _districts.map((district) {
+          return DropdownMenuItem<String>(
+            value: district['id'].toString(),
+            child: Text(district['district_name']),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedDistrict = value;
+            _fetchPlace(value!);
+            _selectedPlace = null;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildPlaceDropdown() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: DropdownButtonFormField<String>(
+        value: _selectedPlace,
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.place),
+          labelText: 'Place',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        items: _places.map((place) {
+          return DropdownMenuItem<String>(
+            value: place['id'].toString(),
+            child: Text(place['place_name']),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() => _selectedPlace = value);
+        },
       ),
     );
   }

@@ -1,4 +1,10 @@
 import 'package:eduflex/Searchcourse.dart';
+import 'package:eduflex/changepassword.dart';
+import 'package:eduflex/complaint.dart';
+import 'package:eduflex/editprofile.dart';
+import 'package:eduflex/feedback.dart';
+import 'package:eduflex/landingpage.dart';
+import 'package:eduflex/main.dart';
 import 'package:eduflex/mycourse.dart';
 import 'package:eduflex/userhomepage.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +12,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
-
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -16,50 +21,23 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  TabController? _tabController;
   bool _isDarkMode = false;
-  
-  // Mock user data
-  final Map<String, dynamic> _userData = {
-    'name': 'Akhil K S',
-    'email': 'akhilsks47@gmail.com',
-    'phone': '+91 9876543210',
-    'profileImage': 'assets/1.png',
-    'coverImage': 'assets/1.png',
-    'role': 'Student',
-    'joinDate': 'Joined March 2023',
-    'completedCourses': 8,
-    'ongoingCourses': 3,
-    'certificates': 5,
-  };
+  Map<String, dynamic>? userData;
+  bool _isLoading = true;
 
-  // List of profile options with their routes and icons
   final List<Map<String, dynamic>> _profileOptions = [
     {
       'title': 'Account',
       'options': [
         {'title': 'Edit Profile', 'route': '/edit_profile', 'icon': Icons.edit_outlined, 'color': Color(0xFF4A6FFF)},
-        {'title': 'Certificates', 'route': '/certificates', 'icon': Icons.workspace_premium_outlined, 'color': Color(0xFF6C63FF)},
-        {'title': 'Payment History', 'route': '/payment_history', 'icon': Icons.receipt_long_outlined, 'color': Color(0xFF8B5CF6)},
+        {'title': 'Change password', 'route': '/Change password', 'icon': Icons.workspace_premium_outlined, 'color': Color(0xFF6C63FF)},
         {'title': 'Notifications', 'route': '/notifications', 'icon': Icons.notifications_outlined, 'color': Color(0xFF4A6FFF)},
-      ]
-    },
-    {
-      'title': 'Support',
-      'options': [
-        {'title': 'Help Center', 'route': '/support', 'icon': Icons.headset_mic_outlined, 'color': Color(0xFF6C63FF)},
         {'title': 'Submit Feedback', 'route': '/feedback', 'icon': Icons.rate_review_outlined, 'color': Color(0xFF8B5CF6)},
         {'title': 'File a Complaint', 'route': '/complaint', 'icon': Icons.report_problem_outlined, 'color': Color(0xFF4A6FFF)},
       ]
     },
-    {
-      'title': 'Preferences',
-      'options': [
-        {'title': 'Settings', 'route': '/settings', 'icon': Icons.settings_outlined, 'color': Color(0xFF6C63FF)},
-        {'title': 'Privacy & Security', 'route': '/privacy', 'icon': Icons.security_outlined, 'color': Color(0xFF8B5CF6)},
-        {'title': 'Rewards & Referrals', 'route': '/reward', 'icon': Icons.card_giftcard_outlined, 'color': Color(0xFF4A6FFF)},
-      ]
-    },
+   
     {
       'title': 'Other',
       'options': [
@@ -72,15 +50,50 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchUserProfile();
   }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+
+      if (userId == null) {
+        debugPrint("User not logged in.");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not logged in')),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await supabase
+          .from('Guest_tbl_user')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      setState(() {
+        userData = response;
+        _isLoading = false;
+      });
+    } catch (error) {
+      debugPrint("Error fetching user profile: $error");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching profile: $error')),
+      );
+      setState(() => _isLoading = false);
+    }
+  }
+  
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
   void _viewProfilePhoto() {
+    if (userData == null) return;
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -90,7 +103,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Blurred background
               BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
@@ -99,8 +111,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   height: double.infinity,
                 ),
               ),
-              
-              // Profile image
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -119,7 +129,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                           ),
                         ],
                         image: DecorationImage(
-                          image: CachedNetworkImageProvider(_userData['profileImage']),
+                          image: CachedNetworkImageProvider(userData!['user_photo']),
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -127,7 +137,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    _userData['name'],
+                    userData!['user_name'],
                     style: GoogleFonts.poppins(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -147,8 +157,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   ),
                 ],
               ),
-              
-              // Close button
               Positioned(
                 top: 40,
                 right: 20,
@@ -179,10 +187,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         const SizedBox(height: 8),
         Text(
           label,
-          style: GoogleFonts.poppins(
-            color: Colors.white,
-            fontSize: 12,
-          ),
+          style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
         ),
       ],
     );
@@ -190,11 +195,22 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (userData == null) {
+      return const Scaffold(
+        body: Center(child: Text('No user data available')),
+      );
+    }
+
     return Scaffold(
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // App Bar with Cover Image
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
@@ -203,10 +219,9 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 children: [
-                  // Cover Image
                   Positioned.fill(
                     child: CachedNetworkImage(
-                      imageUrl: _userData['coverImage'],
+                      imageUrl: userData!['user_photo'],
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Container(
                         color: Theme.of(context).primaryColor.withOpacity(0.5),
@@ -217,22 +232,17 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                       ),
                     ),
                   ),
-                  // Gradient Overlay
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.7),
-                          ],
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
                         ),
                       ),
                     ),
                   ),
-                  // User Name on Cover
                   Positioned(
                     bottom: 20,
                     left: 120,
@@ -240,7 +250,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _userData['name'],
+                          userData!['user_name'],
                           style: GoogleFonts.poppins(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -248,7 +258,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                           ),
                         ),
                         Text(
-                          _userData['role'],
+                          userData!['user_email'],
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             color: Colors.white.withOpacity(0.8),
@@ -265,23 +275,16 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 icon: Icon(_isDarkMode ? Icons.light_mode : Icons.dark_mode),
                 color: Colors.white,
                 onPressed: () {
-                  setState(() {
-                    _isDarkMode = !_isDarkMode;
-                  });
-                  // Implement dark mode toggle
+                  setState(() => _isDarkMode = !_isDarkMode);
                 },
               ),
               IconButton(
                 icon: const Icon(Icons.settings_outlined),
                 color: Colors.white,
-                onPressed: () {
-                  Navigator.pushNamed(context, '/settings');
-                },
+                onPressed: () => Navigator.pushNamed(context, '/settings'),
               ),
             ],
           ),
-
-          // Profile Info Section
           SliverToBoxAdapter(
             child: Transform.translate(
               offset: const Offset(0, -40),
@@ -289,7 +292,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
-                    // Profile Image
                     Row(
                       children: [
                         GestureDetector(
@@ -301,10 +303,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                               height: 100,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 4,
-                                ),
+                                border: Border.all(color: Colors.white, width: 4),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.2),
@@ -316,7 +315,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(50),
                                 child: CachedNetworkImage(
-                                  imageUrl: _userData['profileImage'],
+                                  imageUrl: userData!['user_photo'],
                                   fit: BoxFit.cover,
                                   placeholder: (context, url) => Container(
                                     color: Colors.grey.shade300,
@@ -332,17 +331,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                           ),
                         ),
                         const Spacer(),
-                        _buildStatItem('Completed', _userData['completedCourses'].toString()),
+                        _buildStatItem('Completed', '5'),
                         const SizedBox(width: 15),
-                        _buildStatItem('Ongoing', _userData['ongoingCourses'].toString()),
+                        _buildStatItem('Ongoing', '2'),
                         const SizedBox(width: 15),
-                        _buildStatItem('Certificates', _userData['certificates'].toString()),
+                        _buildStatItem('Change password', '3'),
                       ],
                     ),
-                    
                     const SizedBox(height: 20),
-                    
-                    // User Info Card
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -358,7 +354,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                       ),
                       child: Column(
                         children: [
-                          // Tabs
                           Container(
                             height: 50,
                             decoration: BoxDecoration(
@@ -380,13 +375,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                     children: [
                                       const Icon(Icons.person_outline, size: 18),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        'Info',
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 14,
-                                        ),
-                                      ),
+                                      Text('Info', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
                                     ],
                                   ),
                                 ),
@@ -396,56 +385,34 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                     children: [
                                       const Icon(Icons.school_outlined, size: 18),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        'Education',
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 14,
-                                        ),
-                                      ),
+                                      Text('Education', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
                                     ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          
                           const SizedBox(height: 20),
-                          
-                          // Tab Content
                           SizedBox(
                             height: 150,
                             child: TabBarView(
                               controller: _tabController,
                               children: [
-                                // Info Tab
                                 Column(
                                   children: [
-                                    _buildInfoRow(Icons.email_outlined, 'Email', _userData['email']),
+                                    _buildInfoRow(Icons.email_outlined, 'Email', userData!['user_email']),
                                     const SizedBox(height: 15),
-                                    _buildInfoRow(Icons.phone_outlined, 'Phone', _userData['phone'].toString()),
+                                    _buildInfoRow(Icons.phone_outlined, 'Phone', userData!['user_contact']),
                                     const SizedBox(height: 15),
-                                    _buildInfoRow(Icons.calendar_today_outlined, 'Member Since', _userData['joinDate']),
+                                    _buildInfoRow(Icons.calendar_today_outlined, 'Member Since', 'Jan 2023'),
                                   ],
                                 ),
-                                
-                                // Education Tab
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    _buildEducationItem(
-                                      'Bachelor of Technology',
-                                      'Computer Science & Engineering',
-                                      '2019 - 2023',
-                                      'Kerala Technical University'
-                                    ),
+                                    _buildEducationItem('Bachelor of Technology', 'Computer Science & Engineering', '2019 - 2023', 'Kerala Technical University'),
                                     const SizedBox(height: 15),
-                                    _buildEducationItem(
-                                      'Higher Secondary',
-                                      'Science Stream',
-                                      '2017 - 2019',
-                                      'Kerala State Board'
-                                    ),
+                                    _buildEducationItem('Higher Secondary', 'Science Stream', '2017 - 2019', 'Kerala State Board'),
                                   ],
                                 ),
                               ],
@@ -459,8 +426,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               ),
             ),
           ),
-
-          // Profile Options
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, sectionIndex) {
@@ -470,42 +435,26 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Section Title
                       Padding(
                         padding: const EdgeInsets.only(left: 10, bottom: 10),
                         child: Text(
                           section['title'],
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade700,
-                          ),
+                          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
                         ),
                       ),
-                      
-                      // Section Options
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
+                            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 1),
                           ],
                         ),
                         child: ListView.separated(
                           physics: const NeverScrollableScrollPhysics(),
                           shrinkWrap: true,
                           itemCount: section['options'].length,
-                          separatorBuilder: (context, index) => Divider(
-                            height: 1,
-                            color: Colors.grey.shade200,
-                            indent: 70,
-                            endIndent: 20,
-                          ),
+                          separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade200, indent: 70, endIndent: 20),
                           itemBuilder: (context, optionIndex) {
                             final option = section['options'][optionIndex];
                             return ListTile(
@@ -516,11 +465,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                   color: option['color'].withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Icon(
-                                  option['icon'],
-                                  color: option['color'],
-                                  size: 20,
-                                ),
+                                child: Icon(option['icon'], color: option['color'], size: 20),
                               ),
                               title: Text(
                                 option['title'],
@@ -530,13 +475,43 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                   color: option['title'] == 'Logout' ? Colors.redAccent : Colors.black87,
                                 ),
                               ),
-                              trailing: Icon(
-                                Icons.arrow_forward_ios,
-                                color: Colors.grey.shade400,
-                                size: 16,
-                              ),
+                              trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey.shade400, size: 16),
                               onTap: () {
-                                Navigator.pushNamed(context, option['route']);
+                                if (option['title'] == 'Edit Profile') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => EditProfilePage(), // Pass userData to EditProfile
+                                    ),
+                                  );
+                                }else if (option['title'] == 'Change password') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ChangePasswordPage(), // Pass userData to EditProfile
+                                    ),
+                                  );
+                                } else if (option['title'] == 'File a Complaint') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ComplaintPage(), // Pass userData to EditProfile
+                                    ),
+                                  );
+                                } else if (option['title'] == 'Submit Feedback') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => FeedbackPage(), // Pass userData to EditProfile
+                                    ),
+                                  );
+                                } 
+                                
+                                else if (option['title'] == 'Logout') {
+                                  _handleLogout();
+                                } else {
+                                  Navigator.pushNamed(context, option['route']);
+                                }
                               },
                             );
                           },
@@ -549,18 +524,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               childCount: _profileOptions.length,
             ),
           ),
-
-          // Version Number
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Center(
                 child: Text(
                   'EDUFLEX v8.0.21',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade500),
                 ),
               ),
             ),
@@ -570,28 +540,16 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 1)],
         ),
         child: BottomNavigationBar(
           backgroundColor: Colors.white,
           selectedItemColor: Theme.of(context).primaryColor,
           unselectedItemColor: Colors.grey.shade600,
-          selectedLabelStyle: GoogleFonts.poppins(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
-          ),
-          unselectedLabelStyle: GoogleFonts.poppins(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
-          ),
+          selectedLabelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 12),
+          unselectedLabelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 12),
           type: BottomNavigationBarType.fixed,
-          currentIndex: 3, // Highlight "Profile" tab
+          currentIndex: 3,
           elevation: 0,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
@@ -600,19 +558,17 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
           ],
           onTap: (index) {
-            // Handle bottom navigation tap
             switch (index) {
               case 0:
-                Navigator.push(context, MaterialPageRoute(builder: (context) => UserHomePage(),));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const UserHomePage()));
                 break;
               case 1:
-                Navigator.push(context, MaterialPageRoute(builder: (context) => SearchCoursesPage(),));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const SearchCoursesPage()));
                 break;
               case 2:
-                Navigator.push(context, MaterialPageRoute(builder: (context) => MyCoursesPage(),));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const MyCoursesPage()));
                 break;
               case 3:
-                // Already on profile page
                 break;
             }
           },
@@ -620,6 +576,25 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       ),
     );
   }
+
+Future<void> _handleLogout() async {
+    try {
+      await supabase.auth.signOut();
+      if (mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LandingPage(),)); // Adjust route as needed
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Logged out successfully")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error logging out: $e")),
+        );
+      } 
+    }
+  }
+
 
   Widget _buildStatItem(String label, String value) {
     return Column(
@@ -630,33 +605,17 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(15),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                spreadRadius: 1,
-              ),
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 1)],
           ),
           child: Center(
             child: Text(
               value,
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
-              ),
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
             ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: Colors.grey.shade700,
-          ),
-        ),
+        Text(label, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
       ],
     );
   }
@@ -671,31 +630,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             color: Theme.of(context).primaryColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            color: Theme.of(context).primaryColor,
-            size: 20,
-          ),
+          child: Icon(icon, color: Theme.of(context).primaryColor, size: 20),
         ),
         const SizedBox(width: 15),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            Text(
-              value,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
-            ),
+            Text(label, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600)),
+            Text(value, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
           ],
         ),
       ],
@@ -713,59 +655,26 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             color: Theme.of(context).primaryColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            Icons.school_outlined,
-            color: Theme.of(context).primaryColor,
-            size: 20,
-          ),
+          child: Icon(Icons.school_outlined, color: Theme.of(context).primaryColor, size: 20),
         ),
         const SizedBox(width: 15),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                degree,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              Text(
-                field,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: Colors.black87,
-                ),
-              ),
+              Text(degree, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+              Text(field, style: GoogleFonts.poppins(fontSize: 13, color: Colors.black87)),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Text(
-                    period,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
+                  Text(period, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600)),
                   const SizedBox(width: 10),
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                  Container(width: 4, height: 4, decoration: BoxDecoration(color: Colors.grey.shade400, shape: BoxShape.circle)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       institution,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
+                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -789,12 +698,7 @@ class PlaceholderScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
       ),
@@ -802,27 +706,13 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              _getIconForTitle(title),
-              size: 80,
-              color: Theme.of(context).primaryColor.withOpacity(0.5),
-            ),
+            Icon(_getIconForTitle(title), size: 80, color: Theme.of(context).primaryColor.withOpacity(0.5)),
             const SizedBox(height: 20),
-            Text(
-              "$title Page",
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).primaryColor,
-              ),
-            ),
+            Text("$title Page", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w600, color: Theme.of(context).primaryColor)),
             const SizedBox(height: 10),
             Text(
               "This is a placeholder for the $title screen",
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
+              style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey.shade600),
               textAlign: TextAlign.center,
             ),
           ],
@@ -833,36 +723,20 @@ class PlaceholderScreen extends StatelessWidget {
 
   IconData _getIconForTitle(String title) {
     switch (title) {
-      case 'Home':
-        return Icons.home;
-      case 'Search Courses':
-        return Icons.search;
-      case 'My Courses':
-        return Icons.book;
-      case 'Certificates':
-        return Icons.workspace_premium;
-      case 'Edit Profile':
-        return Icons.edit;
-      case 'Support':
-        return Icons.headset_mic;
-      case 'Feedback':
-        return Icons.rate_review;
-      case 'Complaint':
-        return Icons.report_problem;
-      case 'Reward':
-        return Icons.card_giftcard;
-      case 'Settings':
-        return Icons.settings;
-      case 'Privacy':
-        return Icons.security;
-      case 'Notifications':
-        return Icons.notifications;
-      case 'Payment History':
-        return Icons.receipt_long;
-      case 'Logout':
-        return Icons.logout;
-      default:
-        return Icons.info;
+      case 'Home': return Icons.home;
+      case 'Search Courses': return Icons.search;
+      case 'My Courses': return Icons.book;
+      case 'Change password': return Icons.workspace_premium;
+      case 'Edit Profile': return Icons.edit;
+      case 'Support': return Icons.headset_mic;
+      case 'Feedback': return Icons.rate_review;
+      case 'Complaint': return Icons.report_problem;
+      case 'Reward': return Icons.card_giftcard;
+      case 'Settings': return Icons.settings;
+      case 'Privacy': return Icons.security;
+      case 'Notifications': return Icons.notifications;
+      case 'Logout': return Icons.logout;
+      default: return Icons.info;
     }
   }
 }

@@ -1,6 +1,9 @@
+import 'package:eduflex/Userregistration.dart';
+import 'package:eduflex/main.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:eduflex/landingpage.dart';
 import 'package:eduflex/userhomepage.dart';
-import 'package:flutter/material.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,11 +14,44 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  Future<void> _login() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (response.user != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => UserHomePage()),
+        );
+      }
+    } on AuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.message),
+        backgroundColor: Colors.red,
+      ));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Unexpected error occurred'),
+        backgroundColor: Colors.red,
+      ));
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -26,18 +62,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Logo at the top
-            Image.asset('assets/1.png', height: 80), // Replace with your logo
+            Image.asset('assets/1.png', height: 80),
 
             const SizedBox(height: 20),
 
-            // Login & Signup Tabs
             TabBar(
               controller: _tabController,
               labelColor: Colors.blue,
               unselectedLabelColor: Colors.grey,
               indicatorColor: Colors.blue,
-              indicatorWeight: 2,
               tabs: const [
                 Tab(child: Text("Login", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                 Tab(child: Text("Signup", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
@@ -46,8 +79,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
             const SizedBox(height: 20),
 
-            // Email Input Field
             TextField(
+              controller: _emailController,
               decoration: InputDecoration(
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 labelText: "Email Address",
@@ -59,8 +92,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
             const SizedBox(height: 15),
 
-            // Password Input Field
             TextField(
+              controller: _passwordController,
               obscureText: true,
               decoration: InputDecoration(
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -74,50 +107,48 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
             const SizedBox(height: 15),
 
-            // Gradient Login Button
             Container(
               width: double.infinity,
               height: 50,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF6A11CB), Color(0xFF2575FC)], // Purple to blue gradient
+                  colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => UserHomePage(),));
-                },
+                onPressed: _isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                 ),
-                child: const Text("Login", style: TextStyle(fontSize: 18, color: Colors.white)),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Login", style: TextStyle(fontSize: 18, color: Colors.white)),
               ),
             ),
 
             const SizedBox(height: 10),
 
-            // Forgot Password
             Row(
               children: [
-            TextButton(
-              onPressed: () {},
-              child: const Text("Forgot Password?", style: TextStyle(color: Colors.blue, fontSize: 14)),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => UserRegistration(),));
+                  },
+                  child: const Text("Forgot Password?", style: TextStyle(color: Colors.blue, fontSize: 14)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => LandingPage()));
+                  },
+                  child: const Text('home'),
+                ),
+              ],
             ),
-            
-            TextButton(onPressed: () {
-              Navigator.push(context, MaterialPageRoute( builder: (context) => LandingPage(),));
-            }, child: Text('home'),)
 
-            
-              ]
-            ),
-
-
-            // Social Media Icons
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -133,7 +164,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                   icon: const Icon(Icons.email, color: Colors.red, size: 30),
                   onPressed: () {},
                 ),
-                
               ],
             ),
           ],

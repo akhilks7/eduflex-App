@@ -20,6 +20,9 @@ dependencies:
   google_fonts: ^6.2.1
   shimmer: ^3.0.0
   cached_network_image: ^3.4.1
+  supabase_flutter: ^2.8.4
+  intl: ^0.20.2
+  animate_do: ^4.2.0
 
 dev_dependencies:
   flutter_test:

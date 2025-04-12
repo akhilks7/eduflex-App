@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-class PrerecordedClassScreen extends StatefulWidget {
-  const PrerecordedClassScreen({super.key});
+class PrerecordedClassScreenv extends StatefulWidget {
+  const PrerecordedClassScreenv({super.key});
 
   @override
-  State<PrerecordedClassScreen> createState() => _PrerecordedClassScreenState();
+  State<PrerecordedClassScreenv> createState() => _PrerecordedClassScreenvState();
 }
 
-class _PrerecordedClassScreenState extends State<PrerecordedClassScreen> {
+class _PrerecordedClassScreenvState extends State<PrerecordedClassScreenv> {
   final List<Map<String, dynamic>> classContent = [
     {
       'id': 1,
